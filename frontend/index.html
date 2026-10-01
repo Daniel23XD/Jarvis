@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>J.A.R.V.I.S.</title>
+    <meta name="theme-color" content="#020012">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap');
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#020012;
+            --cyan:#00e5ff;
+            --magenta:#c800ff;
+            --pink:#ff0090;
+        }
+        body{
+            font-family:'Share Tech Mono',monospace;
+            background:var(--bg);
+            color:#c8eaff;
+            height:100vh;height:100dvh;
+            overflow:hidden;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:space-between;
+            user-select:none;
+            -webkit-user-select:none;
+        }
+
+        .top-bar{
+            width:100%;display:flex;justify-content:space-between;align-items:center;
+            padding:12px 20px;
+            border-bottom:1px solid rgba(0,229,255,.08);
+            font-size:11px;letter-spacing:2px;text-transform:uppercase;
+            color:rgba(0,229,255,.5);z-index:20;
+        }
+        .top-bar .title{
+            font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;
+            color:var(--cyan);letter-spacing:4px;
+        }
+        .status-dot{
+            width:8px;height:8px;border-radius:50%;
+            background:var(--cyan);box-shadow:0 0 8px var(--cyan);
+            display:inline-block;margin-right:6px;
+            animation:blink 2s infinite;
+        }
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+        .canvas-wrap{
+            position:relative;
+            width:100%;flex:1;
+            display:flex;justify-content:center;align-items:center;
+        }
+        canvas#hud{
+            position:absolute;
+            top:50%;left:50%;
+            transform:translate(-50%,-50%);
+        }
+
+        /* Invisible tap button over the core */
+        .tap-zone{
+            position:absolute;
+            width:160px;height:160px;
+            border-radius:50%;
+            top:50%;left:50%;
+            transform:translate(-50%,-50%);
+            z-index:30;
+            cursor:pointer;
+            -webkit-tap-highlight-color:transparent;
+            background:transparent;
+            border:none;
+        }
+
+        .tap-hint{
+            position:absolute;
+            bottom:calc(50% - 120px);
+            left:50%;transform:translateX(-50%);
+            font-size:10px;letter-spacing:3px;
+            color:rgba(0,229,255,.25);
+            text-transform:uppercase;
+            z-index:25;
+            animation:fadeHint 4s infinite;
+        }
+        @keyframes fadeHint{0%,100%{opacity:.15}50%{opacity:.4}}
+
+        .status-label{
+            position:absolute;
+            bottom:20px;left:50%;transform:translateX(-50%);
+            font-family:'Rajdhani',sans-serif;
+            font-size:15px;font-weight:600;
+            letter-spacing:5px;text-transform:uppercase;
+            color:var(--cyan);
+            text-shadow:0 0 12px rgba(0,229,255,.5);
+            z-index:20;transition:color .3s;
+        }
+        .status-label.speaking{color:var(--magenta);text-shadow:0 0 12px rgba(200,0,255,.5)}
+        .status-label.listening{color:#fff;text-shadow:0 0 12px rgba(255,255,255,.6)}
+
+        .corner-data{
+            position:absolute;font-size:10px;letter-spacing:1px;
+            color:rgba(0,229,255,.3);z-index:15;line-height:1.6;
+        }
+        .corner-data.tl{top:60px;left:15px}
+        .corner-data.tr{top:60px;right:15px;text-align:right}
+        .corner-data.bl{bottom:60px;left:15px}
+        .corner-data.br{bottom:60px;right:15px;text-align:right}
+
+        .terminal{
+            width:92%;max-width:550px;height:120px;
+            background:rgba(0,229,255,.02);
+            border:1px solid rgba(0,229,255,.1);
+            border-radius:6px;margin-bottom:12px;
+            padding:10px 12px;display:flex;flex-direction:column;
+            z-index:20;backdrop-filter:blur(4px);
+        }
+        .term-logs{
+            flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;font-size:11px;
+        }
+        .term-logs::-webkit-scrollbar{width:3px}
+        .term-logs::-webkit-scrollbar-thumb{background:rgba(0,229,255,.2)}
+        .log-entry{line-height:1.5;opacity:.85}
+        .log-entry.user{color:#fff}
+        .log-entry.jarvis{color:var(--cyan)}
+        .log-entry.system{color:var(--magenta)}
+        .log-prefix{opacity:.4;margin-right:5px}
+        .term-input{
+            display:flex;gap:8px;border-top:1px solid rgba(0,229,255,.08);
+            padding-top:8px;margin-top:6px;
+        }
+        .term-input input{
+            flex:1;background:transparent;border:none;
+            color:var(--cyan);font-family:inherit;font-size:12px;outline:none;
+        }
+        .term-input input::placeholder{color:rgba(0,229,255,.2)}
+
+        .toast{
+            position:fixed;top:50px;right:15px;
+            background:rgba(5,0,20,.92);border:1px solid var(--magenta);
+            border-left:3px solid var(--magenta);padding:12px 16px;
+            color:#fff;font-size:12px;
+            transform:translateX(120%);transition:transform .3s;
+            z-index:100;border-radius:4px;
+        }
+        .toast.show{transform:translateX(0)}
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <span class="title">J.A.R.V.I.S</span>
+    <span><span class="status-dot"></span>ARTIFICIAL INTELLIGENCE</span>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+    <canvas id="hud"></canvas>
+    
+    <!-- Real button for touch/click - BIG zone -->
+    <button class="tap-zone" id="tapZone" aria-label="Activar voz"></button>
+    <div class="tap-hint" id="tapHint">▲ TOCA AQUÍ PARA HABLAR ▲</div>
+
+    <div class="corner-data tl">
+        NEURAL NET: ACTIVE<br>
+        PROC LOAD: <span id="procLoad">12</span>%<br>
+        LATENCY: <span id="latency">--</span>ms
+    </div>
+    <div class="corner-data tr">
+        MODEL: LLAMA 3.1<br>
+        MEMORY: ONLINE<br>
+        VOICE: ES-MX NEURAL
+    </div>
+    <div class="corner-data bl">
+        FREQ: 44100 Hz<br>
+        STT: <span id="sttStatus">CHECKING...</span>
+    </div>
+    <div class="corner-data br">
+        TTS: EDGE NEURAL<br>
+        MIC: <span id="micStatus">CHECKING...</span>
+    </div>
+
+    <div class="status-label" id="statusLabel">INICIALIZANDO...</div>
+</div>
+
+<div class="terminal">
+    <div class="term-logs" id="logsContainer">
+        <div class="log-entry system"><span class="log-prefix">[SYS]</span>J.A.R.V.I.S inicializado correctamente.</div>
+        <div class="log-entry system"><span class="log-prefix">[SYS]</span>Toque el núcleo central para activar voz.</div>
+    </div>
+    <div class="term-input">
+        <span style="color:var(--cyan);opacity:.3">></span>
+        <input type="text" id="textInput" placeholder="Comando manual..." onkeydown="if(event.key==='Enter')sendText()">
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const canvas = document.getElementById('hud');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvasWrap');
+const statusLabel = document.getElementById('statusLabel');
+const logsContainer = document.getElementById('logsContainer');
+const tapHint = document.getElementById('tapHint');
+
+let W, H, cx, cy, R;
+let frame = 0;
+let state = 'idle';
+let stateIntensity = 0;
+
+function resize(){
+    const dpr = window.devicePixelRatio || 1;
+    W = wrap.clientWidth;
+    H = wrap.clientHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2;
+    cy = H / 2;
+    R = Math.min(W, H) * 0.36;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Drawing ──
+function drawRing(r, lw, color, dash, rot, a){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);
+    ctx.globalAlpha=a;ctx.strokeStyle=color;ctx.lineWidth=lw;
+    if(dash)ctx.setLineDash(dash);
+    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+}
+function drawTicks(r, count, len, color, rot, a){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);
+    ctx.globalAlpha=a;ctx.strokeStyle=color;ctx.lineWidth=1;
+    for(let i=0;i<count;i++){
+        const ang=(Math.PI*2/count)*i;
+        const inner=r-len;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang)*inner,Math.sin(ang)*inner);
+        ctx.lineTo(Math.cos(ang)*r,Math.sin(ang)*r);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+function drawArc(r, s, e, lw, color, rot, a){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);
+    ctx.globalAlpha=a;ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(0,0,r,s,e);ctx.stroke();ctx.restore();
+}
+function drawBlob(r, pts, variance, color, rot, a){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);ctx.globalAlpha=a;
+    const step=(Math.PI*2)/pts;
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){
+        const ang=step*i;
+        const n=Math.sin(ang*3+frame*.04)*variance
+               +Math.sin(ang*5-frame*.03)*variance*.5
+               +Math.cos(ang*2+frame*.05)*variance*.3;
+        const x=Math.cos(ang)*(r+n);
+        const y=Math.sin(ang)*(r+n);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    const g=ctx.createRadialGradient(0,0,r*.2,0,0,r+variance);
+    g.addColorStop(0,color);g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.fill();ctx.restore();
+}
+function drawLabel(ang, r, text, color, a){
+    ctx.save();ctx.translate(cx,cy);ctx.globalAlpha=a;
+    ctx.fillStyle=color;ctx.font='9px "Share Tech Mono"';
+    ctx.fillText(text,Math.cos(ang)*r,Math.sin(ang)*r);
+    ctx.restore();
+}
+
+function render(){
+    frame++;
+    ctx.clearRect(0,0,W,H);
+    
+    const target = state==='idle'?0:1;
+    stateIntensity += (target-stateIntensity)*.05;
+    
+    const t=frame*.01;
+    const c='#00e5ff', m='#c800ff', p='#ff0090';
+    const isSp=state==='speaking', isLi=state==='listening', isTh=state==='thinking';
+    const pulse=Math.sin(frame*.05)*.15+.85;
+    
+    // Outer rings
+    drawRing(R*1.15,1,c,[2,6],t*.3,.15);
+    drawRing(R*1.05,1.5,c,null,-t*.2,.2+stateIntensity*.15);
+    drawTicks(R*1.08,72,4,c,-t*.2,.15);
+    drawRing(R*.95,1,m,[8,12],t*.5,.2+stateIntensity*.2);
+    drawRing(R*.82,1,c,null,t*.15,.12);
+    drawTicks(R*.84,36,6,c,t*.15,.2);
+    drawRing(R*.68,.5,m,[3,8],-t*.4,.15);
+    
+    // Arc segments
+    drawArc(R*1.0,0,Math.PI*.4,3,c,t*.3+Math.sin(t)*.3,.5+stateIntensity*.3);
+    drawArc(R*1.0,Math.PI,Math.PI*1.3,3,m,-t*.25,.4+stateIntensity*.3);
+    drawArc(R*.88,.5,.5+Math.PI*.6,2,p,t*.4,.3+stateIntensity*.2);
+    drawArc(R*.88,Math.PI+.8,Math.PI+.8+Math.PI*.5,2,c,-t*.35,.25);
+    drawArc(R*.75,1,1+Math.PI*.3,2,m,t*.6,.35*pulse);
+    drawArc(R*.75,Math.PI+.3,Math.PI+.3+Math.PI*.4,2,c,-t*.5,.3*pulse);
+    
+    // Data labels
+    drawLabel(-.4+t*.1,R*1.12,'57°',c,.3);
+    drawLabel(1.2-t*.05,R*1.12,'T:0.7',m,.25);
+    drawLabel(2.8+t*.08,R*1.12,'P:0.9',c,.2);
+    drawLabel(-1.8-t*.06,R*1.12,'LOAD',m,.2);
+    drawLabel(.6+t*.12,R*.92,'2048tk',c,.2);
+    
+    // Blobs
+    const bVar = isSp?20:(isLi?16:6);
+    const bAlpha = isSp?.5:(isLi?.4:.15);
+    drawBlob(R*.45,80,bVar,c,t*.8,bAlpha);
+    drawBlob(R*.38,60,bVar*.8,m,-t*1.1,bAlpha*.8);
+    drawBlob(R*.28,40,bVar*.5,p,t*1.5,bAlpha*.5);
+    
+    // Core glow
+    ctx.save();ctx.translate(cx,cy);
+    const coreColor = isSp?m:(isLi?'#ffffff':c);
+    const glow=ctx.createRadialGradient(0,0,0,0,0,R*.35);
+    glow.addColorStop(0,coreColor);
+    glow.addColorStop(.3,'transparent');
+    glow.addColorStop(1,'transparent');
+    ctx.globalAlpha=.15+stateIntensity*.25;
+    ctx.fillStyle=glow;
+    ctx.fillRect(-R*.35,-R*.35,R*.7,R*.7);
+    
+    // Core ring
+    ctx.globalAlpha=.5+stateIntensity*.4;
+    ctx.strokeStyle=coreColor;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,0,R*.18,0,Math.PI*2);ctx.stroke();
+    
+    // Core dot
+    ctx.globalAlpha=.9;ctx.fillStyle=coreColor;
+    ctx.beginPath();ctx.arc(0,0,4+Math.sin(frame*.1)*2,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    
+    // Crosshairs
+    ctx.save();ctx.translate(cx,cy);
+    ctx.globalAlpha=.08;ctx.strokeStyle=c;ctx.lineWidth=.5;
+    ctx.beginPath();ctx.moveTo(-R*1.2,0);ctx.lineTo(-R*.2,0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(R*.2,0);ctx.lineTo(R*1.2,0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-R*1.2);ctx.lineTo(0,-R*.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,R*.2);ctx.lineTo(0,R*1.2);ctx.stroke();
+    ctx.restore();
+    
+    // Scanning line when thinking
+    if(isTh){
+        const sa=(frame*.05)%(Math.PI*2);
+        ctx.save();ctx.translate(cx,cy);
+        ctx.globalAlpha=.3;ctx.strokeStyle=c;ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(sa)*R*1.1,Math.sin(sa)*R*1.1);
+        ctx.stroke();ctx.restore();
+    }
+    
+    if(frame%60===0){
+        const load=state==='idle'?(8+Math.floor(Math.random()*8)):
+                   state==='thinking'?(60+Math.floor(Math.random()*30)):
+                   (30+Math.floor(Math.random()*20));
+        document.getElementById('procLoad').textContent=load;
+    }
+    
+    requestAnimationFrame(render);
+}
+render();
+
+// ════════════════════════════════════════
+//  TAP ZONE - Real button for voice
+// ════════════════════════════════════════
+document.getElementById('tapZone').addEventListener('click', function(e){
+    e.preventDefault();
+    toggleVoice();
+});
+
+// ════════════════════════════════════════
+//  NETWORKING
+// ════════════════════════════════════════
+const API = window.location.origin;
+let ws=null, currentConvId=null, recognition=null, isListening=false, currentAudio=null;
+
+window.addEventListener('load', async()=>{
+    initSpeechRecognition();
+    await loadOrCreateConversation();
+});
+
+async function loadOrCreateConversation(){
+    try{
+        const res=await fetch(`${API}/api/conversations`);
+        const convs=await res.json();
+        if(convs.length>0){currentConvId=convs[0].id}
+        else{
+            const c=await fetch(`${API}/api/conversations`,{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({title:'J.A.R.V.I.S Session'})
+            });
+            currentConvId=(await c.json()).id;
+        }
+        connectWS();
+    }catch(e){log('system','Fallo de enlace con servidor.')}
+}
+
+function connectWS(){
+    const proto=location.protocol==='https:'?'wss:':'ws:';
+    ws=new WebSocket(`${proto}//${location.host}/ws/chat/${currentConvId}`);
+    let buf="",sid=null;
+    
+    ws.onmessage=async(e)=>{
+        const d=JSON.parse(e.data);
+        if(d.type==='chunk'){
+            buf+=d.content;
+            if(!sid){sid='m'+Date.now();log('jarvis',buf,sid)}
+            else updateLog(sid,buf);
+        }else if(d.type==='done'){
+            sid=null;
+            const full=d.full_text||buf;buf="";
+            await processResponse(full);
+        }else if(d.type==='error'){
+            sid=null;state='idle';
+            log('system','Error IA: '+d.content);
+            statusLabel.textContent='ERROR';
+        }
+    };
+    ws.onclose=()=>setTimeout(connectWS,3000);
+}
+
+function log(role,text,id=null){
+    const div=document.createElement('div');
+    div.className=`log-entry ${role}`;
+    if(id)div.id=id;
+    const pfx=role==='user'?'[USR]':role==='jarvis'?'[JRV]':'[SYS]';
+    const clean=text.replace(/\[\[ACCION:[\s\S]*?\]\]/g,'').trim();
+    if(!clean&&role!=='system')return;
+    div.innerHTML=`<span class="log-prefix">${pfx}</span>${esc(clean)}`;
+    logsContainer.appendChild(div);
+    logsContainer.scrollTop=logsContainer.scrollHeight;
+}
+function updateLog(id,text){
+    const el=document.getElementById(id);
+    if(el){
+        const clean=text.replace(/\[\[ACCION:[\s\S]*?\]\]/g,'').trim();
+        el.innerHTML=`<span class="log-prefix">[JRV]</span>${esc(clean)}`;
+        logsContainer.scrollTop=logsContainer.scrollHeight;
+    }
+}
+
+async function processResponse(fullText){
+    state='thinking';
+    statusLabel.textContent='PROCESANDO...';
+    statusLabel.className='status-label';
+
+    const re=/\[\[ACCION:\s*(.*?)\s*\|\s*PAYLOAD:\s*([\s\S]*?)\s*\]\]/g;
+    let match;const actions=[];
+    while((match=re.exec(fullText))!==null){
+        actions.push({action:match[1].trim(),payload:match[2].trim()});
+    }
+    for(const a of actions){
+        showToast(`⚡ ${a.action}`);
+        try{await fetch(`${API}/api/action`,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(a)
+        })}catch(e){}
+    }
+
+    const tts=fullText.replace(/\[\[ACCION:[\s\S]*?\]\]/g,'').trim();
+    if(tts){await speak(tts)}
+    else{state='idle';statusLabel.textContent='SISTEMA EN ESPERA';statusLabel.className='status-label'}
+}
+
+function showToast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+// ── STT ──
+function initSpeechRecognition(){
+    const sttEl = document.getElementById('sttStatus');
+    const micEl = document.getElementById('micStatus');
+    
+    window.SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    
+    if(!window.SpeechRecognition){
+        sttEl.textContent='NO DISPONIBLE';
+        micEl.textContent='NO DISPONIBLE';
+        log('system','⚠ Reconocimiento de voz NO disponible en este navegador. Usa Google Chrome en laptop.');
+        statusLabel.textContent='VOZ NO DISPONIBLE - USA TEXTO';
+        return;
+    }
+    
+    sttEl.textContent='DISPONIBLE';
+    
+    recognition=new SpeechRecognition();
+    recognition.lang='es-MX';
+    recognition.interimResults=false;
+    recognition.maxAlternatives=1;
+    recognition.continuous=false;
+
+    recognition.onstart=()=>{
+        isListening=true;
+        state='listening';
+        statusLabel.textContent='🎤 ESCUCHANDO...';
+        statusLabel.className='status-label listening';
+        tapHint.textContent='Escuchando tu voz...';
+        micEl.textContent='ACTIVO';
+        if(currentAudio)currentAudio.pause();
+    };
+    recognition.onresult=(e)=>{
+        const transcript=e.results[0][0].transcript;
+        log('system','Voz captada: "'+transcript+'"');
+        sendToServer(transcript);
+    };
+    recognition.onerror=(e)=>{
+        log('system','Error micrófono: '+e.error);
+        micEl.textContent='ERROR: '+e.error;
+        if(e.error==='not-allowed'){
+            log('system','⚠ Permiso de micrófono DENEGADO. Ve a configuración de Chrome y permite el micrófono para este sitio.');
+        }
+        stopListening();
+    };
+    recognition.onend=()=>stopListening();
+    
+    micEl.textContent='LISTO';
+    statusLabel.textContent='SISTEMA EN ESPERA';
+    log('system','✓ Motor de voz listo. Toca el núcleo central.');
+}
+
+async function toggleVoice(){
+    if(!recognition){
+        log('system','⚠ Motor de voz no cargó. Usa Google Chrome.');
+        statusLabel.textContent='USA CHROME PARA VOZ';
+        return;
+    }
+    if(isListening){
+        recognition.stop();
+        return;
+    }
+    
+    statusLabel.textContent='SOLICITANDO MICRÓFONO...';
+    tapHint.textContent='Permitir micrófono...';
+    
+    if(currentAudio){currentAudio.pause();currentAudio=null;}
+    
+    // Step 1: Request EXPLICIT mic permission (forces Chrome popup)
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        // Got permission! Stop the stream immediately (SpeechRecognition manages its own)
+        stream.getTracks().forEach(t => t.stop());
+        log('system','✓ Micrófono autorizado.');
+        document.getElementById('micStatus').textContent='AUTORIZADO';
+    } catch(e) {
+        log('system','⚠ Micrófono BLOQUEADO: ' + e.message);
+        log('system','Ve a Chrome → Configuración del sitio → Permitir Micrófono');
+        document.getElementById('micStatus').textContent='BLOQUEADO';
+        statusLabel.textContent='MICRÓFONO BLOQUEADO';
+        return;
+    }
+    
+    // Step 2: Now start speech recognition
+    statusLabel.textContent='ACTIVANDO ESCUCHA...';
+    try{recognition.abort()}catch(e){}
+    setTimeout(()=>{
+        try{
+            recognition.start();
+        }catch(e){
+            log('system','Error inicio STT: '+e.message);
+            statusLabel.textContent='ERROR - INTENTA DE NUEVO';
+        }
+    }, 200);
+}
+
+function stopListening(){
+    isListening=false;
+    if(state==='listening'){
+        state='idle';
+        statusLabel.textContent='SISTEMA EN ESPERA';
+        statusLabel.className='status-label';
+    }
+    tapHint.textContent='Toca para hablar';
+}
+
+// ── TTS ──
+async function speak(text){
+    state='speaking';
+    statusLabel.textContent='RESPONDIENDO...';
+    statusLabel.className='status-label speaking';
+    const t0=Date.now();
+    try{
+        const res=await fetch(`${API}/api/tts`,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({text})
+        });
+        if(!res.ok)throw 0;
+        document.getElementById('latency').textContent=Date.now()-t0;
+        const blob=await res.blob();
+        const url=URL.createObjectURL(blob);
+        currentAudio=new Audio(url);
+        currentAudio.onended=()=>{
+            state='idle';
+            statusLabel.textContent='SISTEMA EN ESPERA';
+            statusLabel.className='status-label';
+        };
+        await currentAudio.play();
+    }catch(e){
+        state='idle';
+        statusLabel.textContent='SISTEMA EN ESPERA';
+        statusLabel.className='status-label';
+    }
+}
+
+function sendText(){
+    const inp=document.getElementById('textInput');
+    const msg=inp.value.trim();
+    if(msg){sendToServer(msg);inp.value=''}
+}
+function sendToServer(text){
+    if(!ws||ws.readyState!==WebSocket.OPEN)return;
+    log('user',text);
+    state='thinking';
+    statusLabel.textContent='ANALIZANDO...';
+    statusLabel.className='status-label';
+    ws.send(JSON.stringify({content:text}));
+}
+function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
+</script>
+</body>
+</html>
