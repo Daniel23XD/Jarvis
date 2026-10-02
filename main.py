@@ -23,7 +23,7 @@ from . import actions
 
 
 # ─── Config ──────────────────────────────────────────────────
-MODEL = os.getenv("JARVIS_MODEL", "llama-3.1-70b-versatile")
+MODEL = "llama-3.1-70b-versatile"
 HOST = os.getenv("JARVIS_HOST", "0.0.0.0")
 PORT = int(os.getenv("JARVIS_PORT", "8000"))
 
